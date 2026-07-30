@@ -14,7 +14,10 @@ void Timer_Init(void);
 
 // TIM2: 스위치 롱클릭 타임아웃용 타이머
 void TIM2_Init(void);
+void TIM2_Start(int delay_ms);
+void TIM2_Stop(void);
 
+// WS2812B
 void TIM3_Init(void);
 
 // TIM4: 1ms 시스템 틱 생성 타이머

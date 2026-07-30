@@ -2,6 +2,8 @@
 #include "ws2812b.h"
 #include <stdio.h>
 
+volatile unsigned char TIM2_Timeout_Flag = 0;
+
 void _Invalid_ISR(void)
 {
 	unsigned int r = Macro_Extract_Area(SCB->ICSR, 0x1ff, 0);
@@ -11,32 +13,20 @@ void _Invalid_ISR(void)
 		;
 }
 
+// TIM2 ISR
+void TIM2_IRQHandler(void)
+{
+	Macro_Clear_Bit(TIM2->SR, 0U);
+	NVIC_ClearPendingIRQ(TIM2_IRQn);
+
+	TIM2_Timeout_Flag = 1; // 타임아웃 플래그 Set
+}
+
 // 인터럽트에서 1.25us마다 순차적으로 출력할 1D 전송 버퍼 (RET 40개 + 96비트 = 136개)
 extern unsigned short ccr_buffer[TOTAL_BITS];
 
 extern volatile unsigned short tx_idx;
 extern volatile unsigned char is_busy;
-
-void TIM2_IRQHandler(void)
-{
-	if (Macro_Check_Bit_Set(TIM2->SR, 0U))
-	{
-		Macro_Clear_Bit(TIM2->SR, 0U); // UIF 플래그 클리어
-
-		if (tx_idx < TOTAL_BITS)
-		{
-			// [PA0 / TIM2_CH1] 레지스터인 CCR1 에 다음 파형 대입
-			TIM2->CCR1 = ccr_buffer[tx_idx++];
-		}
-		else
-		{
-			// 136개 비트 전송 완료 시 인터럽트 비활성화
-			Macro_Clear_Bit(TIM2->DIER, 0U); // UIE = 0
-			TIM2->CCR1 = WS2812_DUTY_RET;	 // Output Low 유지
-			is_busy = 0;
-		}
-	}
-}
 
 void TIM3_IRQHandler(void)
 {

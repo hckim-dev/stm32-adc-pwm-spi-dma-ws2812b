@@ -7,52 +7,40 @@ volatile unsigned long Sys_Tick = 0; // 시스템 틱 카운터
 // 타이머 모듈 전체 초기화
 void Timer_Init(void)
 {
-	// TIM2_Init();
+	TIM2_Init();
 	TIM3_Init();
 	TIM4_Init();
 	TIM5_Init();
 }
 
+// TIM2 초기화 (롱클릭 타임아웃용, 단발성)
 void TIM2_Init(void)
 {
-	// RCC 클럭 활성화 (GPIOA, TIM2)
-	Macro_Set_Bit(RCC->AHB1ENR, 0U);
-	Macro_Set_Bit(RCC->APB1ENR, 0U);
+	Macro_Set_Bit(RCC->APB1ENR, 0U);	 // TIM2 클럭 활성화
+	TIM2->CR1 = (1U << 4U) | (1U << 3U); // Down-counter, One-Pulse Mode
+	TIM2->PSC = (unsigned int)(TIMXCLK / (double)TIM_FREQ + 0.5) - 1U;
+}
 
-	// PA0 핀 설정 (AF 모드)
-	Macro_Write_Block(GPIOA->MODER, 0x3, 0x2, 0U * 2U);
+// TIM2 원샷 타이머 시작 (ms)
+void TIM2_Start(int delay_ms)
+{
+	TIM2->ARR = (unsigned int)(TIM_1MS_PLS * delay_ms) - 1U;
+	Macro_Set_Bit(TIM2->EGR, 0U);  // 레지스터 동기화
+	Macro_Clear_Bit(TIM2->SR, 0U); // 펜딩 플래그 클리어
 
-	// PA0 핀 출력 속도를 Very High Speed(0x3)로 설정
-	Macro_Write_Block(GPIOA->OSPEEDR, 0x3, 0x3, 0U * 2U);
-
-	// PA0 - AF01(TIM2_CH1) 매핑
-	Macro_Write_Block(GPIOA->AFR[0], 0xF, 0x1, 0U * 4U);
-
-	// Down-counter, Repeat Mode
-	TIM2->CR1 = (1U << 4U) | (0U << 3U);
-
-	// TIM2 타이머 레지스터 설정 (96MHz)
-	TIM2->PSC = 0U;
-	TIM2->ARR = WS2812_ARR;
-	TIM2->CCR1 = WS2812_DUTY_RET;
-
-	// CCMR1 사용: CH1 PWM Mode 1 & Preload Enable
-	Macro_Write_Block(TIM2->CCMR1, 0xFF, 0x68, 0U);
-
-	// CCER: CH1 출력 활성화, Active Low
-	Macro_Set_Bit(TIM2->CCER, 0U);
-	Macro_Set_Bit(TIM2->CCER, 1U);
-
-	// 레지스터 설정 강제 반영 및 찌꺼기 플래그 청소
-	Macro_Set_Bit(TIM2->EGR, 0U);
-	Macro_Clear_Bit(TIM2->SR, 0U);
-
-	// NVIC 설정
 	NVIC_ClearPendingIRQ(TIM2_IRQn);
+	Macro_Set_Bit(TIM2->DIER, 0U); // 인터럽트 허용
 	NVIC_EnableIRQ(TIM2_IRQn);
 
-	// 타이머 동작 시작 (CEN: bit 0)
-	Macro_Set_Bit(TIM2->CR1, 0U);
+	Macro_Set_Bit(TIM2->CR1, 0U); // 타이머 시작
+}
+
+// TIM2 정지 및 인터럽트 차단
+void TIM2_Stop(void)
+{
+	Macro_Clear_Bit(TIM2->CR1, 0U);
+	Macro_Clear_Bit(TIM2->DIER, 0U);
+	NVIC_DisableIRQ(TIM2_IRQn);
 }
 
 // TIM3 초기화 (PA7 / TIM3_CH2 - WS2812B 전용)
